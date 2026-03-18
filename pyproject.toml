@@ -1,0 +1,105 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novomolgen"
+version = "0.1.0"
+description = "Foundation models for de novo small-molecule generation."
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "openbabel-wheel==3.1.1.23",
+    "openmm",
+    "pdbfixer",
+    "rdkit",
+    "syba @ git+https://github.com/lich-uct/syba.git",
+    "xtb",
+    "crest",
+    "lightgbm==4.3.0",
+    "deepsmiles==1.0.1",
+    "transformers==4.46.2",
+    "accelerate==0.34.0",
+    "datasets==2.20.0",
+    "hydra-core==1.3",
+    "hydra-colorlog",
+    "hydra-optuna-sweeper",
+    "hydra-joblib-launcher",
+    "torchmetrics",
+    "captum",
+    "wandb==0.17.4",
+    "molvs==0.1.1",
+    "selfies==2.1.1",
+    "PyTDC",
+    "pandarallel",
+    "grpcio",
+    "flash-attn==2.6.1",
+    "pyarrow",
+    "openpyxl",
+    "h5py",
+    "jupyterlab",
+    "ipywidgets",
+    "umap-learn",
+    "xgboost==1.0.2",
+    "torch",
+    "torchvision",
+    "safe-mol==0.1.13",
+    "psutil==6.0.0",
+    "setuptools<81",
+    "py-cpuinfo==9.0.0",
+    "numpy",
+    "pandas",
+    "scikit-learn==1.2.0",
+    "scipy",
+    "rootutils",
+    "pre-commit",
+    "rich",
+    "pytest",
+    "sh",
+    "omegaconf",
+    "tqdm",
+    "pynvml==11.5.3",
+    "pickleshare",
+    "fire",
+    "loguru",
+    "sentencepiece==0.2.0",
+    "trl",
+    "tabulate==0.9.0",
+    "pdb-tools",
+    "packaging==24.1",
+    "ninja",
+    "wheel",
+    "deepspeed==0.14.4",
+    "torchdata==0.8.0",
+    "multiprocess",
+    "pyscf",
+    "morfeus-ml",
+    "geometric",
+    "pyberny",
+    "wurlitzer",
+    "sqlalchemy",
+    "medchem",
+    "polars-u64-idx",
+    "lightning",
+    "evaluate",
+    "descriptastorus",
+    "pyscreener",
+    "group-selfies @ git+https://github.com/aspuru-guzik-group/group-selfies.git",
+    "atomInSmiles==1.0.2",
+    "polanyi @ git+https://github.com/kjelljorner/polanyi.git",
+    "geodesic-interpolate @ git+https://github.com/virtualzx-nad/geodesic-interpolate.git",
+    "fcd_torch==1.0.7",
+    "rd-filters @ git+https://github.com/PatWalters/rd_filters.git",
+]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.uv]
+package = false
+
+[tool.uv.extra-build-dependencies]
+flash-attn = [{ requirement = "torch", match-runtime = true }]
+
+[tool.uv.extra-build-variables]
+flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE" }
