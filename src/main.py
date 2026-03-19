@@ -2,6 +2,8 @@ import os
 import warnings
 from pathlib import Path
 
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import fire
 import rootutils
 import torch
@@ -118,7 +120,14 @@ def run_finetune(cfg: DictConfig) -> None:
     model, tokenizer = _prepare_base_model(cfg)
 
     # Reward function
-    n_jobs = get_real_cpu_cores()
+    available_n_jobs = max(1, get_real_cpu_cores())
+    requested_n_jobs = max(1, int(cfg.finetune.get("n_jobs", 4)))
+    n_jobs = min(requested_n_jobs, available_n_jobs)
+    if requested_n_jobs > available_n_jobs:
+        warnings.warn(
+            f"finetune.n_jobs={requested_n_jobs} exceeds available CPU cores "
+            f"({available_n_jobs}); using {n_jobs}."
+        )
     task = MoleculeEvaluator(
         task_names=[cfg.finetune.task_name], batch_size=128, n_jobs=n_jobs
     )
@@ -148,6 +157,7 @@ def run_finetune(cfg: DictConfig) -> None:
         model=model,
         reward_fn=reward_fn,
         tokenizer=tokenizer,
+        n_jobs=n_jobs,
     )
 
     # Optional WandB

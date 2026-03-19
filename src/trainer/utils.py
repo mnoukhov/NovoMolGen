@@ -81,6 +81,8 @@ class PolicyTrainerConfig:
 
     dataset_name: str = "MolGen/ZINC_250K_prop"
     use_random_sampling: bool = True
+    n_jobs: int = 4
+    """CPU worker count for reward evaluation and related finetune preprocessing"""
 
     # Generation config
     max_length: int = 64
@@ -119,6 +121,8 @@ class PolicyTrainerConfig:
 
         if self.fp16 and self.bf16:
             raise ValueError("At most one of fp16 and bf16 can be True, but not both")
+        if self.n_jobs < 1:
+            raise ValueError("n_jobs must be >= 1")
 
         mixed_precision_dtype = os.environ.get("ACCELERATE_MIXED_PRECISION", "no")
         if self.fp16:
