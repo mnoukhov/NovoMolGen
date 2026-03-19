@@ -14,6 +14,7 @@ WANDB_PROJECT="${WANDB_PROJECT:-chem-llm-pipeline}"
 WANDB_MODE="${WANDB_MODE:-online}"
 CONFIG_NAME="${CONFIG_NAME:-finetune_PMO_ZINC_1B_bpe_smiles_llama-32M}"
 GANTRY_GROUP="${GANTRY_GROUP:-}"
+GANTRY_ALLOW_DIRTY="${GANTRY_ALLOW_DIRTY:-0}"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <task_name> [extra finetune args...]" >&2
@@ -29,6 +30,11 @@ cd "$repo_root"
 group_args=()
 if [[ -n "$GANTRY_GROUP" ]]; then
   group_args+=(--group "$GANTRY_GROUP")
+fi
+
+dirty_args=()
+if [[ "$GANTRY_ALLOW_DIRTY" == "1" ]]; then
+  dirty_args+=(--allow-dirty)
 fi
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo no-git-branch)"
@@ -47,6 +53,7 @@ gantry run \
     --uv-all-extras \
     --show-logs \
     --default-python-version "$DEFAULT_PYTHON" \
+    --pre-setup "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python${DEFAULT_PYTHON}-dev" \
     --env WANDB_ENTITY="$WANDB_ENTITY" \
     --env WANDB_PROJECT="$WANDB_PROJECT" \
     --env WANDB_MODE="$WANDB_MODE" \
@@ -57,6 +64,7 @@ gantry run \
     --cluster "$CLUSTER" \
     --workspace "$WORKSPACE" \
     --gpus "$GPUS" \
+    "${dirty_args[@]}" \
     --name "$name" \
     "${group_args[@]}" \
     -- \
