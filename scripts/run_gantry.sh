@@ -5,7 +5,7 @@ IMAGE="${IMAGE:-ai2/cuda12.8-dev-ubuntu22.04-notorch}"
 WEKA_MOUNT="${WEKA_MOUNT:-oe-adapt-default:/weka/oe-adapt-default}"
 DEFAULT_PYTHON="${DEFAULT_PYTHON:-3.10}"
 PRIORITY="${PRIORITY:-high}"
-CLUSTER="${CLUSTER:-ai2/saturn}"
+CLUSTER="${CLUSTER:-ai2/neptune}"
 WORKSPACE="${WORKSPACE:-ai2/oe-adapt-code}"
 GPUS="${GPUS:-4}"
 
