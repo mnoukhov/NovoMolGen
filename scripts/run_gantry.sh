@@ -51,7 +51,6 @@ gantry run \
     --beaker-image "$IMAGE" \
     --weka="$WEKA_MOUNT" \
     --uv-all-extras \
-    --show-logs \
     --default-python-version "$DEFAULT_PYTHON" \
     --pre-setup "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python${DEFAULT_PYTHON}-dev" \
     --env WANDB_ENTITY="$WANDB_ENTITY" \
