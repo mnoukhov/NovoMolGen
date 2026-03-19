@@ -33,7 +33,7 @@ dependencies = [
     "PyTDC",
     "pandarallel",
     "grpcio",
-    "flash-attn==2.6.1",
+    "flash-attn @ https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.16/flash_attn-2.7.4%2Bcu128torch2.10-cp310-cp310-linux_x86_64.whl",
     "pyarrow",
     "openpyxl",
     "h5py",
@@ -90,6 +90,7 @@ dependencies = [
     "geodesic-interpolate @ git+https://github.com/virtualzx-nad/geodesic-interpolate.git",
     "fcd_torch==1.0.7",
     "rd-filters @ git+https://github.com/PatWalters/rd_filters.git",
+    "hf-transfer>=0.1.9",
 ]
 
 [tool.setuptools]
@@ -105,8 +106,6 @@ quiet = false
 [tool.uv]
 package = false
 
-[tool.uv.extra-build-dependencies]
-flash-attn = [{ requirement = "torch", match-runtime = true }]
 
 [tool.ruff]
 lint.ignore = ["E501", "E741", "W605"]
