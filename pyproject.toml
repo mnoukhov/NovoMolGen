@@ -95,11 +95,25 @@ dependencies = [
 [tool.setuptools]
 py-modules = []
 
+[tool.gantry]
+workspace = "ai2/oe-adapt-code"
+gh_token_secret = "michaeln_GITHUB_TOKEN"
+budget = "ai2/oe-adapt"
+log_level = "warning"
+quiet = false
+
 [tool.uv]
 package = false
 
 [tool.uv.extra-build-dependencies]
 flash-attn = [{ requirement = "torch", match-runtime = true }]
 
-[tool.uv.extra-build-variables]
-flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE" }
+[tool.ruff]
+lint.ignore = ["E501", "E741", "W605"]
+lint.select = ["E", "F", "I", "W"]
+line-length = 119
+
+[lint.isort]
+lines-after-imports = 2
+known-first-party = ["src"]
+
