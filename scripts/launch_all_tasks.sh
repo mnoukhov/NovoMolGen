@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+group="${GANTRY_GROUP:-novomol-$(date -u +%Y%m%d-%H%M%S)}"
 
 tasks=(
   "Albuterol_Similarity"
@@ -29,5 +30,5 @@ tasks=(
 )
 
 for task in "${tasks[@]}"; do
-  "$repo_root/scripts/run_gantry.sh" "$task" "$@"
+  GANTRY_GROUP="$group" "$repo_root/scripts/run_gantry.sh" "$task" "$@"
 done
