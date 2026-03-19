@@ -7,7 +7,7 @@ DEFAULT_PYTHON="${DEFAULT_PYTHON:-3.10}"
 PRIORITY="${PRIORITY:-high}"
 CLUSTER="${CLUSTER:-ai2/neptune}"
 WORKSPACE="${WORKSPACE:-ai2/oe-adapt-code}"
-GPUS="${GPUS:-4}"
+GPUS="${GPUS:-1}"
 
 WANDB_ENTITY="${WANDB_ENTITY:-diegos-mila}"
 WANDB_PROJECT="${WANDB_PROJECT:-chem-llm-pipeline}"
