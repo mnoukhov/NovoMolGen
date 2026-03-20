@@ -778,7 +778,7 @@ class REINVENTTrainer(PolicyTrainer):
             split=split,
             num_proc=1,
         )
-        candidate_k = top_k * self.config.prefill_roundtrip_oversample_factor
+        candidate_k = min(len(ds), top_k * self.config.prefill_roundtrip_oversample_factor)
 
         if reward_column not in ds.column_names:
             raise ValueError(f"`{reward_column}` not found in {dataset_name}. Available columns: {ds.column_names}")
@@ -837,6 +837,21 @@ class REINVENTTrainer(PolicyTrainer):
         top_scores = top_scores[selected_indices]
         input_ids = encodings["input_ids"][selected_indices]
         smiles_list = [smiles_list[idx] for idx in selected_indices]
+
+        if self.config.prefill_drop_non_roundtrip and self.config.prefill_roundtrip_oversample_factor > 1:
+            retained_top1_reward = float(top_scores.max()) if len(top_scores) > 0 else float("nan")
+            retained_top10_reward = (
+                float(torch.topk(top_scores, k=min(10, len(top_scores))).values.mean())
+                if len(top_scores) > 0
+                else float("nan")
+            )
+            logger.info(
+                "[Replay-Buffer preload] Using "
+                f"{len(top_scores)} molecules after oversampling/filtering "
+                f"(candidate pool = {candidate_k}, requested = {top_k}). "
+                f"retained top-1 = {retained_top1_reward:4.3f} | "
+                f"retained top-10 avg = {retained_top10_reward:4.3f}"
+            )
 
         # Compute log-prob under the *prior* (frozen) model
         ref_model.eval()  # just to be safe
