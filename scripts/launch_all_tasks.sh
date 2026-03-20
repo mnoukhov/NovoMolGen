@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-group="${GANTRY_GROUP:-novomol-$(date -u +%Y%m%d-%H%M%S)}"
+name_prefix="${NAME_PREFIX:-novomol}"
+group="${GANTRY_GROUP:-${name_prefix}-$(date -u +%Y%m%d-%H%M%S)}"
 
 tasks=(
   "Albuterol_Similarity"
