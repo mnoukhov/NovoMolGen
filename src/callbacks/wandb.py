@@ -1,6 +1,6 @@
 from transformers.trainer_callback import TrainerCallback
 from transformers.integrations.integration_utils import is_wandb_available, rewrite_logs
-from transformers.utils import logging, ENV_VARS_TRUE_VALUES, is_torch_tpu_available
+from transformers.utils import logging, ENV_VARS_TRUE_VALUES, is_torch_xla_available
 import tempfile
 import numbers
 from pathlib import Path
@@ -10,6 +10,10 @@ import importlib.util
 
 
 logger = logging.get_logger(__name__)
+
+
+def is_torch_tpu_available() -> bool:
+    return is_torch_xla_available()
 
 # modified code from: https://github.com/huggingface/transformers/blob/71d47f0ad498b7649f11d3a9cca3cd3585e4341f/src/transformers/integrations/integration_utils.py#L665
 class WandbCallback(TrainerCallback):
@@ -177,5 +181,4 @@ class WandbCallback(TrainerCallback):
             artifact = self._wandb.Artifact(name=checkpoint_name, type="model", metadata=checkpoint_metadata)
             artifact.add_dir(artifact_path)
             self._wandb.log_artifact(artifact, aliases=[f"checkpoint-{state.global_step}"])
-
 

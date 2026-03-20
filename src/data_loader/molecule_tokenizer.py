@@ -16,7 +16,6 @@ from typing import Dict, Optional
 
 import rootutils
 from datasets import load_dataset
-from safe import SAFETokenizer
 from tokenizers import Regex, Tokenizer, decoders
 from tokenizers.models import BPE, Unigram, WordLevel, WordPiece
 from tokenizers.pre_tokenizers import Split
@@ -39,7 +38,7 @@ EOS_TOKEN = "<eos>"
 SPECIAL_TOKENS = [UNK_TOKEN, PADDING_TOKEN, BOS_TOKEN, EOS_TOKEN]
 
 
-class MoleculeTokenizer(SAFETokenizer):
+class MoleculeTokenizer:
     """Class to initialize and train a tokenizer for molecule string.
 
     Once trained, you can use the converted version of the tokenizer to an HuggingFace
@@ -56,7 +55,6 @@ class MoleculeTokenizer(SAFETokenizer):
         decoder_args=None,
         token_model_args=None,
     ):
-        super().__init__()
         self.tokenizer_type = tokenizer_type
         self.trainer_args = trainer_args or {}
         self.decoder_args = decoder_args or {}

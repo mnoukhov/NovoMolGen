@@ -9,6 +9,7 @@ from huggingface_hub import HfApi
 from torchdata.stateful_dataloader import StatefulDataLoader
 from transformers import TrainingArguments
 import torch.distributed as dist
+from typing import List, Optional
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
@@ -873,5 +874,4 @@ class HFTrainer(Trainer):
             grad_norm += param.grad.data.norm(2).item() ** 2 if param.grad is not None else 0
             weight_norm += param.data.norm(2).item() ** 2
         return weight_norm ** 0.5, grad_norm ** 0.5
-
 

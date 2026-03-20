@@ -1,7 +1,6 @@
 from typing import Any, Tuple
 from pathlib import Path
 
-import safe
 import selfies as sf
 from deepsmiles import Converter
 
@@ -18,6 +17,8 @@ def safe_to_smiles(safe_str: str) -> str:
     :return: SMILES string
     """
     try:
+        import safe
+
         return safe.decode(safe_str)
     except Exception as e:
         print(f"Error decoding SAFE string {safe_str}: {e}")

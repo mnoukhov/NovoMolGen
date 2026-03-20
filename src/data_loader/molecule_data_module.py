@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Union, Optional, List
 
 import rootutils
-import safe
 import selfies as sf
 from datasets import load_dataset, load_from_disk
 from datasets.config import HF_CACHE_HOME
@@ -184,6 +183,8 @@ class MolDataModule:
                 converted = ""
         elif target_mol_type == "SAFE":
             try:
+                import safe
+
                 # TODO: check if ignore_stereo is needed
                 converted = safe.encode(element["SMILES"], ignore_stereo=True)
             except Exception as e:
