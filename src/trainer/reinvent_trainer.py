@@ -750,7 +750,7 @@ class REINVENTTrainer(PolicyTrainer):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False,   # important to avoid re-inserting spaces
         )
-        if smiles_list != decoded:                       # mismatch ➜ warn & fix
+        if smiles_list != decoded:
             diffs = [
                 f"{orig}  →  {dec}"
                 for orig, dec in zip(smiles_list, decoded)
@@ -762,7 +762,8 @@ class REINVENTTrainer(PolicyTrainer):
                 + "\n".join(diffs[:20])                  # show up to 20 lines
                 + ("\n…" if len(diffs) > 20 else "")
             )
-            smiles_list = decoded                        # use the recovered strings
+            if isinstance(ref_model, NovoMolGen):
+                smiles_list = decoded
 
 
         # Compute log-prob under the *prior* (frozen) model
