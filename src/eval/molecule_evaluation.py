@@ -90,7 +90,7 @@ PROPERTY_DISTRIBUTION_TASKS = {
     "NP": NP,
     "NumRings": get_n_rings,
     "Bertz": Bertz,
-    "PenalizedLogP": Oracle(name="LogP"),
+    "PenalizedLogP": "tdc_logp",
     "TPSA": TPSA,
     "AliphaticRings": NumAliphaticRings,
     "AromaticRings": NumAromaticRings,
@@ -105,6 +105,13 @@ FRAGMENT_TASKS = {
 }
 
 TARTARUS_TASKS = {"pce": get_pce, "tadf": get_tadf, "reactivity": get_reactivity}
+
+
+def _get_property_distribution_evaluator(task_name: str):
+    evaluator = PROPERTY_DISTRIBUTION_TASKS[task_name]
+    if evaluator == "tdc_logp":
+        return Oracle(name="LogP")
+    return evaluator
 
 
 class MoleculeEvaluator:
@@ -239,7 +246,7 @@ class MoleculeEvaluator:
 
             # Assign evaluator function for property distribution metrics
             elif task_name.split("_")[0] in PROPERTY_DISTRIBUTION_TASKS.keys():
-                evaluator_func = PROPERTY_DISTRIBUTION_TASKS[task_name.split("_")[0]]
+                evaluator_func = _get_property_distribution_evaluator(task_name.split("_")[0])
                 if "wasserstein" in task_name:
                     assert (
                         self.valid_stats is not None
