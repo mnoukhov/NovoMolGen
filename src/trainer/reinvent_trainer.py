@@ -206,6 +206,10 @@ class REINVENTConfig(PolicyTrainerConfig):
     """Maximum tanimato similarity treshold for computing novel molecules"""
     prefill_experience_replay: bool = False
     """Prefill experience replay buffer with molecules from dataset"""
+    prefill_drop_non_roundtrip: bool = False
+    """Drop preload molecules that do not round-trip through the tokenizer instead of rewriting them"""
+    prefill_roundtrip_oversample_factor: int = 1
+    """Oversampling factor used when dropping preload molecules that fail round-trip checks"""
     # --- novelty-temperature scheduler --------------------------------
     temp_patience: int = 5  # steps in a row w/ no new SMILES
     temp_multiplier: float = 1.10  # scale factor (e.g. 1.10 → +10 %)
@@ -224,6 +228,10 @@ class REINVENTConfig(PolicyTrainerConfig):
             raise ValueError(
                 f"experience_replay_max_size:{self.experience_replay} should larger than experience_replay:{self.experience_replay}"
             )
+        if self.prefill_roundtrip_oversample_factor < 1:
+            raise ValueError("prefill_roundtrip_oversample_factor must be >= 1")
+        elif self.prefill_roundtrip_oversample_factor > 1:
+            assert self.prefill_drop_non_roundtrip is True, "must be dropping non roundtrip if you want to oversample"
 
 
 class REINVENTTrainer(PolicyTrainer):
@@ -770,13 +778,14 @@ class REINVENTTrainer(PolicyTrainer):
             split=split,
             num_proc=1,
         )
+        candidate_k = top_k * self.config.prefill_roundtrip_oversample_factor
 
         if reward_column not in ds.column_names:
             raise ValueError(f"`{reward_column}` not found in {dataset_name}. Available columns: {ds.column_names}")
 
-        # Select the k best rows
+        # Select the best rows from an oversampled candidate pool.
         scores = torch.tensor(ds[reward_column])
-        top_scores, top_idx = scores.topk(top_k, sorted=False)
+        top_scores, top_idx = scores.topk(candidate_k, sorted=True)
         smiles_list = np.array(ds[self.model.mol_type])[top_idx.numpy()].tolist()
 
         # Tokenise once
@@ -794,21 +803,46 @@ class REINVENTTrainer(PolicyTrainer):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False,  # important to avoid re-inserting spaces
         )
+        selected_indices = list(range(len(smiles_list)))
         if smiles_list != decoded:
-            diffs = [f"{orig}  →  {dec}" for orig, dec in zip(smiles_list, decoded) if orig != dec]
+            mismatch_indices = [idx for idx, (orig, dec) in enumerate(zip(smiles_list, decoded)) if orig != dec]
+            diffs = [f"{smiles_list[idx]}  →  {decoded[idx]}" for idx in mismatch_indices]
             logger.warning(
                 "[Replay-Buffer preload] Tokenisation round-trip mismatch on "
                 f"{len(diffs)} / {len(smiles_list)} molecules:\n"
                 + "\n".join(diffs[:20])  # show up to 20 lines
                 + ("\n…" if len(diffs) > 20 else "")
             )
-            smiles_list = decoded
+            if self.config.prefill_drop_non_roundtrip:
+                mismatch_index_set = set(mismatch_indices)
+                selected_indices = [idx for idx in range(len(smiles_list)) if idx not in mismatch_index_set][:top_k]
+                if len(selected_indices) < top_k:
+                    logger.warning(
+                        "[Replay-Buffer preload] Retained only "
+                        f"{len(selected_indices)} / {top_k} molecules after dropping round-trip mismatches."
+                    )
+            elif isinstance(ref_model, NovoMolGen):
+                smiles_list = decoded
+            else:
+                logger.warning(
+                    "[Replay-Buffer preload] Keeping original molecules for non-NovoMolGen model despite "
+                    "round-trip mismatch."
+                )
+        else:
+            selected_indices = selected_indices[:top_k]
+
+        if not self.config.prefill_drop_non_roundtrip:
+            selected_indices = selected_indices[:top_k]
+
+        top_scores = top_scores[selected_indices]
+        input_ids = encodings["input_ids"][selected_indices]
+        smiles_list = [smiles_list[idx] for idx in selected_indices]
 
         # Compute log-prob under the *prior* (frozen) model
         ref_model.eval()  # just to be safe
         prior_logp = []
 
-        batch_ids = encodings["input_ids"].to(self.accelerator.device)
+        batch_ids = input_ids.to(self.accelerator.device)
         logits = ref_model(batch_ids).logits
         logp = self.logprobs_from_logits(logits, batch_ids)
         prior_logp = logp.cpu().tolist()
