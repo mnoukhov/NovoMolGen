@@ -269,7 +269,8 @@ def _prepare_base_model(config: DictConfig) -> Tuple[NovoMolGen, Any]:
         checkpoint = config.finetune.checkpoint
         checkpoint_cfg = AutoConfig.from_pretrained(checkpoint)
         auto_map = getattr(checkpoint_cfg, "auto_map", None) or {}
-        if auto_map.get("AutoModelForCausalLM") == "modeling_novomolgen.NovoMolGen":
+        automodel_target = auto_map.get("AutoModelForCausalLM", "")
+        if automodel_target.endswith("modeling_novomolgen.NovoMolGen"):
             tokenizer = MoleculeTokenizer.load(
                 config.dataset.tokenizer_path
             ).get_pretrained()
