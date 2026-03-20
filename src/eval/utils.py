@@ -65,12 +65,15 @@ def get_mol(smiles_or_mol):
     if isinstance(smiles_or_mol, str):
         if len(smiles_or_mol) == 0:
             return None
-        mol = Chem.MolFromSmiles(smiles_or_mol)
+        try:
+            mol = Chem.MolFromSmiles(smiles_or_mol)
+        except Exception:
+            return None
         if mol is None:
             return None
         try:
             Chem.SanitizeMol(mol)
-        except ValueError:
+        except Exception:
             return None
         return mol
     elif isinstance(smiles_or_mol, float) and math.isnan(smiles_or_mol):
