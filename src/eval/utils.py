@@ -1,7 +1,7 @@
+import math
 import subprocess
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from os import devnull
-import math
 from subprocess import DEVNULL
 
 from multiprocess.pool import Pool
@@ -65,10 +65,7 @@ def get_mol(smiles_or_mol):
     if isinstance(smiles_or_mol, str):
         if len(smiles_or_mol) == 0:
             return None
-        try:
-            mol = Chem.MolFromSmiles(smiles_or_mol)
-        except Exception:
-            return None
+        mol = Chem.MolFromSmiles(smiles_or_mol)
         if mol is None:
             return None
         try:

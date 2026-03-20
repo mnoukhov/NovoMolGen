@@ -1,31 +1,30 @@
 import json
 import os
 from dataclasses import dataclass
-from typing import List, Dict, Tuple
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 import rootutils
 import torch
-import wandb
 from accelerate import Accelerator
+from rdkit.Chem import AllChem
+from rdkit.DataStructs import BulkTanimotoSimilarity
 from tqdm import tqdm
-from transformers import PreTrainedTokenizerBase, DataCollatorForLanguageModeling
+from transformers import DataCollatorForLanguageModeling, PreTrainedTokenizerBase
 from transformers.trainer_pt_utils import get_model_param_count
 
-from rdkit.Chem import AllChem
-from rdkit.DataStructs import BulkTanimotoSimilarity, ExplicitBitVect, cDataStructs
+import wandb
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-from src.trainer.utils import PolicyTrainerConfig
-from src.trainer.policy_trainer import PolicyTrainer
-from src.models import NovoMolGen, generate_valid_smiles
 from src.eval import MoleculeEvaluator
 from src.eval.molecule_evaluation import top_auc
 from src.eval.utils import get_mol, mapper
-from src.trainer.policy_trainer import MAXIMUM_TANIMATO_SIMILARITY
 from src.logging_utils import get_logger
+from src.models import NovoMolGen, generate_valid_smiles
+from src.trainer.policy_trainer import PolicyTrainer
+from src.trainer.utils import PolicyTrainerConfig
 
 logger = get_logger(__name__)
 
@@ -40,30 +39,28 @@ class Experience:
     - Automatically creates a DataCollatorForLanguageModeling with mlm=False.
     """
 
-    def __init__(self,
-    tokenizer: PreTrainedTokenizerBase,
-    max_size: int = 100,
-    sampling: str = "weighted",
-    seed: int = 42,
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        max_size: int = 100,
+        sampling: str = "weighted",
+        seed: int = 42,
     ):
         """
         Args:
           tokenizer: A Hugging Face tokenizer (PreTrainedTokenizerFast),
                      already set up for your SMILES or plain text.
           max_size: Maximum number of (SMILES, score, prior_likelihood) entries to keep.
-          sampling: Sampling method which by deafult is weighted by the importance of the scores. 
+          sampling: Sampling method which by deafult is weighted by the importance of the scores.
         """
         self.memory = []  # will hold [(smiles_str, score, prior_likelihood), ...]
         self.max_size = max_size
         self.tokenizer = tokenizer
         self.sampling = sampling
-        self.g = torch.Generator(device='cpu').manual_seed(seed)
+        self.g = torch.Generator(device="cpu").manual_seed(seed)
 
         # Create a data collator for LM tasks, but with mlm=False by default
-        self.data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer,
-            mlm=False
-        )
+        self.data_collator = DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False)
 
     def add_experience(self, experience):
         """
@@ -84,7 +81,7 @@ class Experience:
 
             # Sort by descending score and truncate
             unique_data.sort(key=lambda x: x[1], reverse=True)
-            self.memory = unique_data[:self.max_size]
+            self.memory = unique_data[: self.max_size]
 
     def sample(self, n: int):
         """
@@ -125,14 +122,14 @@ class Experience:
         # Tokenize SMILES in a batch
         encodings = self.tokenizer(
             smiles_list,
-            return_tensors='pt',
+            return_tensors="pt",
             padding=True,  # pad to longest in batch
-            truncation=True  # truncate if beyond model's max length
+            truncation=True,  # truncate if beyond model's max length
         )
 
         # Convert encodings dict -> list of dicts for data collator
         batch_for_collator = []
-        for i in range(encodings['input_ids'].size(0)):
+        for i in range(encodings["input_ids"].size(0)):
             example_dict = {}
             for key in encodings.keys():
                 example_dict[key] = encodings[key][i]
@@ -160,7 +157,7 @@ class Experience:
         # but if not, ensure it is here:
         sorted_memory = sorted(self.memory, key=lambda x: x[1], reverse=True)
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write("SMILES Score PriorLogP\n")
             for i, exp in enumerate(sorted_memory[:100]):
                 # exp = (smiles, score, prior_likelihood)
@@ -178,7 +175,6 @@ class Experience:
         print("\n" + "*" * 80 + "\n")
 
     def get_top_smiles(self, topk: int = 100):
-
         sorted_memory = sorted(self.memory, key=lambda x: x[1], reverse=True)
         smiles_list = [x[0] for x in sorted_memory[:topk]]
         return smiles_list
@@ -211,23 +207,26 @@ class REINVENTConfig(PolicyTrainerConfig):
     prefill_experience_replay: bool = False
     """Prefill experience replay buffer with molecules from dataset"""
     # --- novelty-temperature scheduler --------------------------------
-    temp_patience        : int   = 5      # steps in a row w/ no new SMILES
-    temp_multiplier      : float = 1.10   # scale factor (e.g. 1.10 → +10 %)
-    temp_max             : float = 2.0    # don’t let T explode
+    temp_patience: int = 5  # steps in a row w/ no new SMILES
+    temp_multiplier: float = 1.10  # scale factor (e.g. 1.10 → +10 %)
+    temp_max: float = 2.0  # don’t let T explode
 
     def __post_init__(self):
         super().__post_init__()
 
         if self.only_novel_samples and self.maximum_tanimato_similarity_threshold is None:
-            logger.warning(f"use novel samples but maximum_tanimato_similarity_threshold was not set. we will set to to 0.5 by default")
+            logger.warning(
+                "use novel samples but maximum_tanimato_similarity_threshold was not set. we will set to to 0.5 by default"
+            )
             self.maximum_tanimato_similarity_threshold = 0.5
 
         if self.experience_replay_max_size < self.experience_replay:
-            raise ValueError(f"experience_replay_max_size:{self.experience_replay} should larger than experience_replay:{self.experience_replay}")
+            raise ValueError(
+                f"experience_replay_max_size:{self.experience_replay} should larger than experience_replay:{self.experience_replay}"
+            )
 
 
 class REINVENTTrainer(PolicyTrainer):
-
     def __init__(self, **kwargs):
         """
         Initializes the REINVENT trainer.
@@ -240,11 +239,11 @@ class REINVENTTrainer(PolicyTrainer):
         super().__init__(**kwargs)
         self.generated_molecules_to_reward = dict()
         self.experience = Experience(
-            tokenizer=self.tokenizer, 
-            sampling=self.config.experience_sampling, 
-            max_size=self.config.experience_replay_max_size, 
-            seed=self.config.seed
-            )
+            tokenizer=self.tokenizer,
+            sampling=self.config.experience_sampling,
+            max_size=self.config.experience_replay_max_size,
+            seed=self.config.seed,
+        )
         self._no_new_counter = 0
 
     def generate(self, model: NovoMolGen):
@@ -272,17 +271,17 @@ class REINVENTTrainer(PolicyTrainer):
             return_canonical_unique=True,
         )
 
-        generated_smiles = outputs['SMILES']
+        generated_smiles = outputs["SMILES"]
         sequences = outputs["sequences"]
         metrics["train/uniqness"] = len(generated_smiles) / self.config.per_device_train_batch_size
         if len(generated_smiles) == 0:
-            return {'SMILES': [], 'sequences': sequences}, metrics
-        
+            return {"SMILES": [], "sequences": sequences}, metrics
+
         if self.config.only_novel_samples:
             novel_idx = self._get_novel_molecules(generated_smiles)
             if len(novel_idx) == 0:
                 metrics["train/novelty"] = 0
-                return {'SMILES': [], 'sequences': sequences}, metrics
+                return {"SMILES": [], "sequences": sequences}, metrics
 
             metrics["train/novelty"] = len(novel_idx) / len(generated_smiles)
             generated_smiles = np.array(generated_smiles)[novel_idx].tolist()
@@ -298,9 +297,8 @@ class REINVENTTrainer(PolicyTrainer):
                 token_detoken_check = [x == y for x, y in zip(generated_smiles, deocde_smiles)]
                 assert sum(token_detoken_check) == len(generated_smiles)
 
-        return {'SMILES': generated_smiles, 'sequences': sequences.clone()}, metrics
+        return {"SMILES": generated_smiles, "sequences": sequences.clone()}, metrics
 
-    
     def _get_novel_molecules(self, molecules: List[str]) -> List[int]:
         """Find novel molecules in a list of SMILES strings.
 
@@ -343,7 +341,7 @@ class REINVENTTrainer(PolicyTrainer):
                 max_sim = get_similarity(inputs_fp=new_fp, fps=new_list_of_fps + self._dataset_fps)
                 if max_sim < self.config.maximum_tanimato_similarity_threshold:
                     novel_idx.append(i)
-            
+
             # only append novel one in _dataset_fps
             self._dataset_fps += [new_fp for i, new_fp in enumerate(new_fps) if i in novel_idx]
             return novel_idx
@@ -365,7 +363,7 @@ class REINVENTTrainer(PolicyTrainer):
             self.generated_molecules_to_reward.update(zip(new_smiles, new_rewards))
 
         score = torch.tensor([self.generated_molecules_to_reward[sm] for sm in generated_smiles])
-        if 'docking' in self.config.task_name:
+        if "docking" in self.config.task_name:
             score[score > 0] = 0
             score = score / self.config.normalize_docking
 
@@ -377,25 +375,32 @@ class REINVENTTrainer(PolicyTrainer):
             top_10_reward = torch.topk(all_rewards, 10, largest=self.config.higher_is_better).values.mean().item()
         except:
             top_10_reward = 0
-        five_percentile_reward = torch.topk(all_rewards, int(0.05 * len(all_rewards)),
-                                            largest=self.config.higher_is_better).values.mean().item()
+        five_percentile_reward = (
+            torch.topk(all_rewards, int(0.05 * len(all_rewards)), largest=self.config.higher_is_better)
+            .values.mean()
+            .item()
+        )
         num_oracle_calls = len(all_rewards)
 
-        metrics.update({
-            "train/top_1_reward": top_1_reward,
-            "train/top_10_reward": top_10_reward,
-            "train/five_percentile_reward": five_percentile_reward,
-            "train/num_oracle_calls": num_oracle_calls})
+        metrics.update(
+            {
+                "train/top_1_reward": top_1_reward,
+                "train/top_10_reward": top_10_reward,
+                "train/five_percentile_reward": five_percentile_reward,
+                "train/num_oracle_calls": num_oracle_calls,
+            }
+        )
 
         return score.to(self.accelerator.device), metrics
 
-    def _compute_loss(self,
-                      model: NovoMolGen,
-                      agent_likelihood: torch.Tensor,
-                      prior_likelihood: torch.Tensor,
-                      reward: torch.Tensor,
-                      generated_smiles: List[str],
-                      ):
+    def _compute_loss(
+        self,
+        model: NovoMolGen,
+        agent_likelihood: torch.Tensor,
+        prior_likelihood: torch.Tensor,
+        reward: torch.Tensor,
+        generated_smiles: List[str],
+    ):
         """
         Computes the REINVENT loss to align the agent policy with high-reward molecular candidates.
 
@@ -441,7 +446,7 @@ class REINVENTTrainer(PolicyTrainer):
 
         if self.config.experience_replay and len(self.experience) > self.config.experience_replay:
             exp_seqs, exp_score, exp_prior_likelihood = self.experience.sample(self.config.experience_replay)
-            exp_seqs = exp_seqs['input_ids'].to(self.accelerator.device)
+            exp_seqs = exp_seqs["input_ids"].to(self.accelerator.device)
             exp_score = exp_score.to(self.accelerator.device)
             exp_prior_likelihood = exp_prior_likelihood.to(self.accelerator.device)
             exp_agent_logits = model(exp_seqs).logits
@@ -457,7 +462,7 @@ class REINVENTTrainer(PolicyTrainer):
         self.experience.add_experience(new_experience)
 
         loss = loss.mean()
-        loss_p = - (1 / agent_likelihood).mean()
+        loss_p = -(1 / agent_likelihood).mean()
         loss += self.config.penalty_coef * loss_p
 
         metrics = {
@@ -469,12 +474,14 @@ class REINVENTTrainer(PolicyTrainer):
 
         return loss, metrics
 
-    def _train_step(self,
-                    model: NovoMolGen,
-                    ref_model: NovoMolGen,
-                    optimizer: torch.optim.Optimizer,
-                    scheduler: torch.optim.lr_scheduler.LRScheduler,
-                    accelerator: Accelerator) -> Dict[str, float]:
+    def _train_step(
+        self,
+        model: NovoMolGen,
+        ref_model: NovoMolGen,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler,
+        accelerator: Accelerator,
+    ) -> Dict[str, float]:
         """
         Performs a single training step including generation, reward computation, loss backpropagation, and optimization.
 
@@ -489,8 +496,8 @@ class REINVENTTrainer(PolicyTrainer):
             dict: Dictionary of training metrics.
         """
         outputs, generation_metrics = self.generate(model=model)
-        generated_smiles = outputs['SMILES']
-        sequences = outputs['sequences']
+        generated_smiles = outputs["SMILES"]
+        sequences = outputs["sequences"]
         if len(generated_smiles) == 0 or sequences.shape[0] == 0:
             logger.info("No valid/unique SMILES generated this step; skipping update.")
             return generation_metrics
@@ -517,20 +524,28 @@ class REINVENTTrainer(PolicyTrainer):
         if self.config.max_grad_norm is not None and self.config.max_grad_norm > 0:
             grad_norm = accelerator.clip_grad_norm_(model.parameters(), self.config.max_grad_norm)
             metrics.update({"train/grad_norm": grad_norm.item()})
-            metrics.update({"train/weight_norm": (torch.tensor(
-                [p.data.norm(2).item() ** 2 for p in model.parameters()]).sum() ** 0.5).item()})
+            metrics.update(
+                {
+                    "train/weight_norm": (
+                        torch.tensor([p.data.norm(2).item() ** 2 for p in model.parameters()]).sum() ** 0.5
+                    ).item()
+                }
+            )
         optimizer.step()
         optimizer.zero_grad()
         if scheduler is not None:
             scheduler.step()
-            metrics.update({'train/learning_rate': scheduler.get_last_lr()[0]})
+            metrics.update({"train/learning_rate": scheduler.get_last_lr()[0]})
 
-        metrics.update({'train/kl': self._compute_kl(policy_logit=agent_likelihood, ref_logit=prior_likelihood,
-                                                     input_ids=sequences)})
-        
-        self._maybe_increase_temperature(
-            new_smiles_this_step=int(metrics.get("train/new_smiles", 0))
+        metrics.update(
+            {
+                "train/kl": self._compute_kl(
+                    policy_logit=agent_likelihood, ref_logit=prior_likelihood, input_ids=sequences
+                )
+            }
         )
+
+        self._maybe_increase_temperature(new_smiles_this_step=int(metrics.get("train/new_smiles", 0)))
         return metrics
 
     def train(self, resume_from_checkpoint: bool = False, skip_eval: bool = False):
@@ -546,8 +561,7 @@ class REINVENTTrainer(PolicyTrainer):
 
         model, ref_model = self.model, self.ref_model
         optimizer, scheduler = self._prepare_optimizer_and_scheduler(
-            model=model,
-            num_training_steps=total_num_optimization_steps
+            model=model, num_training_steps=total_num_optimization_steps
         )
 
         model, ref_model, optimizer, scheduler = self.accelerator.prepare(model, ref_model, optimizer, scheduler)
@@ -559,7 +573,9 @@ class REINVENTTrainer(PolicyTrainer):
         logger.info(f"  Number of Trainable Parameters = {get_model_param_count(model, trainable_only=True):,}")
 
         if self.config.prefill_experience_replay:
-            logger.info(f"Prefill experience replay buffer with {self.config.experience_replay_max_size} molecules from {self.config.dataset_name} dataset")
+            logger.info(
+                f"Prefill experience replay buffer with {self.config.experience_replay_max_size} molecules from {self.config.dataset_name} dataset"
+            )
             if not resume_from_checkpoint:
                 self._preload_experience_buffer(ref_model=ref_model)
             else:
@@ -569,7 +585,7 @@ class REINVENTTrainer(PolicyTrainer):
         progress_bar = tqdm(
             total=total_num_optimization_steps,
             disable=False,
-            desc=f"Training",
+            desc="Training",
             dynamic_ncols=True,
         )
         progress_bar.update(completed_optim_steps)
@@ -580,7 +596,8 @@ class REINVENTTrainer(PolicyTrainer):
                 ref_model=ref_model,
                 optimizer=optimizer,
                 scheduler=scheduler,
-                accelerator=self.accelerator)
+                accelerator=self.accelerator,
+            )
             self._log_training_metrics(metrics, progress_bar=progress_bar)
             self.trainer_state.global_step += 1
             progress_bar.update(1)
@@ -603,8 +620,10 @@ class REINVENTTrainer(PolicyTrainer):
             save_path (str): Directory to save evaluation results.
         """
         if len(self.generated_molecules_to_reward) < self.config.oracle_call_budget:
-            logger.info(f"Number of generated molecules is less than oracle call budget. start generating and evaluating new molecules")
-            model.eval() 
+            logger.info(
+                "Number of generated molecules is less than oracle call budget. start generating and evaluating new molecules"
+            )
+            model.eval()
             pbar = tqdm(
                 total=self.config.oracle_call_budget,
                 initial=len(self.generated_molecules_to_reward),
@@ -615,7 +634,10 @@ class REINVENTTrainer(PolicyTrainer):
             empty_iters = 0
             max_total_iters = 50
             total_iters = 0
-            while len(self.generated_molecules_to_reward) < self.config.oracle_call_budget and empty_iters < max_empty_iters:
+            while (
+                len(self.generated_molecules_to_reward) < self.config.oracle_call_budget
+                and empty_iters < max_empty_iters
+            ):
                 remaining = self.config.oracle_call_budget - len(self.generated_molecules_to_reward)
                 outputs = generate_valid_smiles(
                     model=model,
@@ -627,8 +649,8 @@ class REINVENTTrainer(PolicyTrainer):
                     top_p=self.config.top_p,
                     device=self.accelerator.device,
                     return_canonical_unique=True,
-                )    
-                new_smiles = list(set(outputs['SMILES']) - set(self.generated_molecules_to_reward.keys()))[:remaining]
+                )
+                new_smiles = list(set(outputs["SMILES"]) - set(self.generated_molecules_to_reward.keys()))[:remaining]
                 self._maybe_increase_temperature(new_smiles_this_step=len(new_smiles), minimum_new_smiles=100)
                 if len(new_smiles) == 0:
                     empty_iters += 1
@@ -641,13 +663,13 @@ class REINVENTTrainer(PolicyTrainer):
                     logger.warning(f"Reached maximum total iterations ({max_total_iters}). Stopping generation.")
                     break
                 pbar.update(len(new_smiles))
-        
+
         generated_smiles = list(self.generated_molecules_to_reward.keys())
         scores = torch.tensor(list(self.generated_molecules_to_reward.values()))
 
         final_results = {
-            'SMILES': generated_smiles,
-            'Score': scores.tolist(),
+            "SMILES": generated_smiles,
+            "Score": scores.tolist(),
         }
         self.experience.print_memory(os.path.join(save_path, "memory.txt"))
         json_string = json.dumps(final_results, indent=2, sort_keys=True) + "\n"
@@ -662,7 +684,7 @@ class REINVENTTrainer(PolicyTrainer):
         top_generated_smiles = [generated_smiles[i] for i in top_scores_idx_list]
         top_scores = scores[top_scores_idx]
 
-        evaluator = MoleculeEvaluator(task_names=['SA', 'IntDiv'], batch_size=512, n_jobs=self.n_jobs, device='cpu')
+        evaluator = MoleculeEvaluator(task_names=["SA", "IntDiv"], batch_size=512, n_jobs=self.n_jobs, device="cpu")
         res = evaluator(top_generated_smiles, filter=True, return_valid_index=True)
         valid_mask = np.asarray(
             res.get("valid_index", [True] * len(top_generated_smiles)),
@@ -670,17 +692,17 @@ class REINVENTTrainer(PolicyTrainer):
         )
         top_generated_smiles = np.asarray(top_generated_smiles)[valid_mask].tolist()
         top_scores = top_scores[torch.as_tensor(valid_mask, device=top_scores.device, dtype=torch.bool)]
-        sa_scores = torch.tensor(res['SA'])
-        intdiv_scores = torch.tensor(res['IntDiv'])
+        sa_scores = torch.tensor(res["SA"])
+        intdiv_scores = torch.tensor(res["IntDiv"])
 
         final_results = {
-            'SMILES': top_generated_smiles,
-            'Score': top_scores.tolist(),
-            'SA': sa_scores.tolist(),
+            "SMILES": top_generated_smiles,
+            "Score": top_scores.tolist(),
+            "SA": sa_scores.tolist(),
         }
-        
+
         df = pd.DataFrame.from_dict(final_results)
-        df = (df.sort_values("Score", ascending=not self.config.higher_is_better).reset_index(drop=True))
+        df = df.sort_values("Score", ascending=not self.config.higher_is_better).reset_index(drop=True)
         wandb_table = wandb.Table(dataframe=df)
         if wandb.run is not None:
             wandb.log({"eval/results": wandb_table})
@@ -690,19 +712,36 @@ class REINVENTTrainer(PolicyTrainer):
 
         mol_buffer = {
             smiles: (score_tensor.item(), idx)
-            for idx, (smiles, score_tensor) in enumerate(
-                self.generated_molecules_to_reward.items(), start=1)
+            for idx, (smiles, score_tensor) in enumerate(self.generated_molecules_to_reward.items(), start=1)
         }
 
         metrics = {
-            'eval/IntDiv': intdiv_scores.mean().item(),
-            'eval/top100/SA_avg': sa_scores.mean().item(),
-            'eval/top100/reward_avg': top_scores.mean().item(),
-            'eval/top10/SA_avg': sa_scores[top10_indices].mean().item(),
-            'eval/top10/reward_avg': top_scores[top10_indices].mean().item(),
-            'eval/top1/auc': top_auc(mol_buffer=mol_buffer, top_n=1, finish=True, freq_log=100, max_oracle_calls=self.config.oracle_call_budget),
-            'eval/top10/auc': top_auc(mol_buffer=mol_buffer, top_n=10, finish=True, freq_log=1, max_oracle_calls=self.config.oracle_call_budget),
-            'eval/top100/auc': top_auc(mol_buffer=mol_buffer, top_n=100, finish=True, freq_log=100, max_oracle_calls=self.config.oracle_call_budget),
+            "eval/IntDiv": intdiv_scores.mean().item(),
+            "eval/top100/SA_avg": sa_scores.mean().item(),
+            "eval/top100/reward_avg": top_scores.mean().item(),
+            "eval/top10/SA_avg": sa_scores[top10_indices].mean().item(),
+            "eval/top10/reward_avg": top_scores[top10_indices].mean().item(),
+            "eval/top1/auc": top_auc(
+                mol_buffer=mol_buffer,
+                top_n=1,
+                finish=True,
+                freq_log=100,
+                max_oracle_calls=self.config.oracle_call_budget,
+            ),
+            "eval/top10/auc": top_auc(
+                mol_buffer=mol_buffer,
+                top_n=10,
+                finish=True,
+                freq_log=1,
+                max_oracle_calls=self.config.oracle_call_budget,
+            ),
+            "eval/top100/auc": top_auc(
+                mol_buffer=mol_buffer,
+                top_n=100,
+                finish=True,
+                freq_log=100,
+                max_oracle_calls=self.config.oracle_call_budget,
+            ),
         }
         self._log_training_metrics(metrics=metrics)
 
@@ -724,7 +763,7 @@ class REINVENTTrainer(PolicyTrainer):
         from datasets import load_dataset
 
         reward_column = self.config.task_name
-        top_k         = self.config.experience_replay_max_size
+        top_k = self.config.experience_replay_max_size
 
         ds = load_dataset(
             path=dataset_name,
@@ -733,13 +772,10 @@ class REINVENTTrainer(PolicyTrainer):
         )
 
         if reward_column not in ds.column_names:
-            raise ValueError(
-                f"`{reward_column}` not found in {dataset_name}. "
-                f"Available columns: {ds.column_names}"
-            )
+            raise ValueError(f"`{reward_column}` not found in {dataset_name}. Available columns: {ds.column_names}")
 
         # Select the k best rows
-        scores      = torch.tensor(ds[reward_column])
+        scores = torch.tensor(ds[reward_column])
         top_scores, top_idx = scores.topk(top_k, sorted=False)
         smiles_list = np.array(ds[self.model.mol_type])[top_idx.numpy()].tolist()
 
@@ -756,31 +792,25 @@ class REINVENTTrainer(PolicyTrainer):
         decoded = self.tokenizer.batch_decode(
             encodings["input_ids"],
             skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,   # important to avoid re-inserting spaces
+            clean_up_tokenization_spaces=False,  # important to avoid re-inserting spaces
         )
         if smiles_list != decoded:
-            diffs = [
-                f"{orig}  →  {dec}"
-                for orig, dec in zip(smiles_list, decoded)
-                if orig != dec
-            ]
+            diffs = [f"{orig}  →  {dec}" for orig, dec in zip(smiles_list, decoded) if orig != dec]
             logger.warning(
                 "[Replay-Buffer preload] Tokenisation round-trip mismatch on "
                 f"{len(diffs)} / {len(smiles_list)} molecules:\n"
-                + "\n".join(diffs[:20])                  # show up to 20 lines
+                + "\n".join(diffs[:20])  # show up to 20 lines
                 + ("\n…" if len(diffs) > 20 else "")
             )
-            if isinstance(ref_model, NovoMolGen):
-                smiles_list = decoded
-
+            smiles_list = decoded
 
         # Compute log-prob under the *prior* (frozen) model
-        ref_model.eval()            # just to be safe
+        ref_model.eval()  # just to be safe
         prior_logp = []
 
-        batch_ids  = encodings["input_ids"].to(self.accelerator.device)
-        logits     = ref_model(batch_ids).logits
-        logp       = self.logprobs_from_logits(logits, batch_ids)
+        batch_ids = encodings["input_ids"].to(self.accelerator.device)
+        logits = ref_model(batch_ids).logits
+        logp = self.logprobs_from_logits(logits, batch_ids)
         prior_logp = logp.cpu().tolist()
 
         # Add to replay buffer
@@ -788,18 +818,17 @@ class REINVENTTrainer(PolicyTrainer):
         self.experience.add_experience(new_experience)
 
         # ---------------- extra bookkeeping & logging -----------------
-        avg_reward      = float(torch.tensor(top_scores).mean())
-        top1_reward     = float(torch.tensor(top_scores).max())
-        top10_reward    = float(torch.topk(torch.tensor(top_scores), 
-                                           k=min(10, len(top_scores))).values.mean())
-        avg_prior_logp  = float(np.mean(prior_logp))
+        avg_reward = float(torch.tensor(top_scores).mean())
+        top1_reward = float(torch.tensor(top_scores).max())
+        top10_reward = float(torch.topk(torch.tensor(top_scores), k=min(10, len(top_scores))).values.mean())
+        avg_prior_logp = float(np.mean(prior_logp))
 
         log_dict = {
-            "preload/buffer_size"     : len(self.experience),
-            "preload/top1_reward"     : top1_reward,
-            "preload/top10_reward"    : top10_reward,
-            "preload/avg_reward"      : avg_reward,
-            "preload/avg_prior_logp"  : avg_prior_logp,
+            "preload/buffer_size": len(self.experience),
+            "preload/top1_reward": top1_reward,
+            "preload/top10_reward": top10_reward,
+            "preload/avg_reward": avg_reward,
+            "preload/avg_prior_logp": avg_prior_logp,
         }
 
         logger.info(
@@ -840,9 +869,7 @@ class REINVENTTrainer(PolicyTrainer):
                 f"[TempScheduler] No-novelty streak = {cfg.temp_patience} → "
                 f"increasing temperature  {old_T:.3f}  →  {new_T:.3f}"
             )
-            self._log_training_metrics(metrics={'train/temperature': new_T})
+            self._log_training_metrics(metrics={"train/temperature": new_T})
 
         # restart the counter so we need another full streak before next bump
         self._no_new_counter = 0
-
-    
