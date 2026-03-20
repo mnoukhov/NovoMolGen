@@ -282,8 +282,16 @@ def _prepare_base_model(config: DictConfig) -> Tuple[NovoMolGen, Any]:
                     tokenizer.pad_token = tokenizer.eos_token
                 else:
                     tokenizer.add_special_tokens({"pad_token": "<pad>"})
-            model = load_generic_hf_model(checkpoint, mol_type=config.dataset.mol_type)
-            logger.info("Loaded generic HF causal LM from %s", checkpoint)
+            model = load_generic_hf_model(
+                checkpoint,
+                mol_type=config.dataset.mol_type,
+                attention_backend=config.finetune.get("attention_backend", "auto"),
+            )
+            logger.info(
+                "Loaded generic HF causal LM from %s with attention backend %s",
+                checkpoint,
+                getattr(model, "_attention_backend", "default"),
+            )
     elif config.finetune.checkpoint == 0:
         tokenizer = MoleculeTokenizer.load(
             config.dataset.tokenizer_path

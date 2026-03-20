@@ -104,6 +104,7 @@ class PolicyTrainerConfig:
 
     # will not use directly
     checkpoint: Union[int, str] = None
+    attention_backend: str = "auto"
     save_path: str = None
     additional_evaluation_metrics: List[str] = None
     wandb_tag: str = None

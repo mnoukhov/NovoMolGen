@@ -192,7 +192,31 @@ def prepare_hf_model(model, mol_type: str = "SMILES"):
 def load_generic_hf_model(
     checkpoint: str,
     mol_type: str = "SMILES",
+    attention_backend: str = "auto",
     **kwargs,
 ):
-    model = AutoModelForCausalLM.from_pretrained(checkpoint, **kwargs)
-    return prepare_hf_model(model, mol_type=mol_type)
+    preferred_backend = attention_backend
+    if preferred_backend == "auto":
+        preferred_backend = "flash_attention_2" if torch.cuda.is_available() else "sdpa"
+
+    tried_backends = []
+    for backend in [preferred_backend, "sdpa", "eager", None]:
+        if backend in tried_backends:
+            continue
+        tried_backends.append(backend)
+        try:
+            if backend is None:
+                model = AutoModelForCausalLM.from_pretrained(checkpoint, **kwargs)
+            else:
+                model = AutoModelForCausalLM.from_pretrained(
+                    checkpoint,
+                    attn_implementation=backend,
+                    **kwargs,
+                )
+            model._attention_backend = backend or "default"
+            return prepare_hf_model(model, mol_type=mol_type)
+        except (TypeError, ValueError, ImportError, NotImplementedError) as exc:
+            last_exc = exc
+            continue
+
+    raise last_exc
