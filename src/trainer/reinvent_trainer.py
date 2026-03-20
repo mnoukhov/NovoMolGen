@@ -656,11 +656,20 @@ class REINVENTTrainer(PolicyTrainer):
 
         top_k = min(100, len(scores))
         top_scores_idx = torch.topk(scores, top_k, largest=self.config.higher_is_better).indices
-        top_generated_smiles = np.array(generated_smiles)[top_scores_idx].tolist()
+        top_scores_idx_list = top_scores_idx.tolist()
+        if isinstance(top_scores_idx_list, int):
+            top_scores_idx_list = [top_scores_idx_list]
+        top_generated_smiles = [generated_smiles[i] for i in top_scores_idx_list]
         top_scores = scores[top_scores_idx]
 
         evaluator = MoleculeEvaluator(task_names=['SA', 'IntDiv'], batch_size=512, n_jobs=self.n_jobs, device='cpu')
-        res = evaluator(top_generated_smiles, filter=True)
+        res = evaluator(top_generated_smiles, filter=True, return_valid_index=True)
+        valid_mask = np.asarray(
+            res.get("valid_index", [True] * len(top_generated_smiles)),
+            dtype=bool,
+        )
+        top_generated_smiles = np.asarray(top_generated_smiles)[valid_mask].tolist()
+        top_scores = top_scores[torch.as_tensor(valid_mask, device=top_scores.device, dtype=torch.bool)]
         sa_scores = torch.tensor(res['SA'])
         intdiv_scores = torch.tensor(res['IntDiv'])
 
@@ -668,7 +677,6 @@ class REINVENTTrainer(PolicyTrainer):
             'SMILES': top_generated_smiles,
             'Score': top_scores.tolist(),
             'SA': sa_scores.tolist(),
-            'IntDiv': intdiv_scores.tolist(),
         }
         
         df = pd.DataFrame.from_dict(final_results)
