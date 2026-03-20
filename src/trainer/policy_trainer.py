@@ -633,7 +633,8 @@ class PolicyTrainer:
         with open(os.path.join(save_path, "generated_molecules.json"), "w", encoding="utf-8") as f:
             f.write(json_string)
 
-        top_scores_idx = torch.topk(scores, 100, largest=self.config.higher_is_better).indices
+        top_k = min(100, len(scores))
+        top_scores_idx = torch.topk(scores, top_k, largest=self.config.higher_is_better).indices
         top_generated_smiles = np.array(generated_smiles)[top_scores_idx].tolist()
         top_scores = scores[top_scores_idx]
 
@@ -664,10 +665,11 @@ class PolicyTrainer:
             'eval/final/IntDiv': intdiv_scores.mean().item(),
             'eval/final/SA_avg': sa_scores.mean().item(),
             'eval/final/top_10_reward':torch.topk(scores, 10,largest=self.config.higher_is_better).values.mean().item(),
-            'eval/final/top_100_reward':torch.topk(scores, 100,largest=self.config.higher_is_better).values.mean().item(),
+            'eval/final/top_100_reward': torch.topk(
+                scores, min(100, len(scores)), largest=self.config.higher_is_better
+            ).values.mean().item(),
             'eval/final/novel_top_10_reward':torch.topk(novel_top_scores, min(10, len(novel_top_scores)),largest=self.config.higher_is_better).values.mean().item(),
             'eval/final/reward': scores.numpy()
         }
         self._log_training_metrics(metrics=metrics)
         
-

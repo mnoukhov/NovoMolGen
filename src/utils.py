@@ -12,6 +12,7 @@ import psutil
 import rootutils
 import torch
 import transformers
+from transformers import AutoConfig, AutoTokenizer
 from hydra import compose, initialize
 from omegaconf import DictConfig, OmegaConf
 
@@ -20,7 +21,7 @@ rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.callbacks import Evaluator, WandbCallback
 from src.data_loader import MoleculeTokenizer
 from src.logging_utils import get_logger
-from src.models import NovoMolGen, NovoMolGenConfig
+from src.models import NovoMolGen, NovoMolGenConfig, load_generic_hf_model
 from src.trainer import (
     HFTrainingArguments,          # only for type hints
     SFTConfig, SFTTrainer,
@@ -264,14 +265,29 @@ _FINETUNE_REGISTRY: Dict[
 
 def _prepare_base_model(config: DictConfig) -> Tuple[NovoMolGen, Any]:
     """Load checkpoint or fresh model + tokenizer."""
-    tokenizer = MoleculeTokenizer.load(
-        config.dataset.tokenizer_path
-    ).get_pretrained()
-
     if isinstance(config.finetune.checkpoint, str):
-        model = NovoMolGen.from_pretrained(config.finetune.checkpoint)
-        logger.info("Loaded model from %s", config.finetune.checkpoint)
+        checkpoint = config.finetune.checkpoint
+        checkpoint_cfg = AutoConfig.from_pretrained(checkpoint)
+        auto_map = getattr(checkpoint_cfg, "auto_map", None) or {}
+        if auto_map.get("AutoModelForCausalLM") == "modeling_novomolgen.NovoMolGen":
+            tokenizer = MoleculeTokenizer.load(
+                config.dataset.tokenizer_path
+            ).get_pretrained()
+            model = NovoMolGen.from_pretrained(checkpoint)
+            logger.info("Loaded NovoMolGen model from %s", checkpoint)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+            if tokenizer.pad_token_id is None:
+                if tokenizer.eos_token_id is not None:
+                    tokenizer.pad_token = tokenizer.eos_token
+                else:
+                    tokenizer.add_special_tokens({"pad_token": "<pad>"})
+            model = load_generic_hf_model(checkpoint, mol_type=config.dataset.mol_type)
+            logger.info("Loaded generic HF causal LM from %s", checkpoint)
     elif config.finetune.checkpoint == 0:
+        tokenizer = MoleculeTokenizer.load(
+            config.dataset.tokenizer_path
+        ).get_pretrained()
         model = init_model(
             config.model,
             max_seq_length=config.dataset.max_seq_length,
@@ -282,6 +298,9 @@ def _prepare_base_model(config: DictConfig) -> Tuple[NovoMolGen, Any]:
         )
         logger.info("Initialized new model from scratch")
     else:
+        tokenizer = MoleculeTokenizer.load(
+            config.dataset.tokenizer_path
+        ).get_pretrained()
         base_name = creat_unique_experiment_name(config)
         ckpt = f"tmp-spec-checkpoint-{config.finetune.checkpoint}"
         model = NovoMolGen.from_pretrained(f"MolGen/{base_name}", checkpoint_path=ckpt)

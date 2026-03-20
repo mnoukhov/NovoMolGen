@@ -3,6 +3,7 @@ import torch
 import rootutils
 import numpy as np
 import types
+from transformers import AutoModelForCausalLM
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
@@ -183,4 +184,15 @@ def _sample_molecules_hfmodel(
 def prepare_hf_model(model, mol_type: str = "SMILES"):
     model.sample = types.MethodType(_sample_molecules_hfmodel, model)
     model.mol_type = mol_type
+    model.base_config = model.config
+    model.config.output_hidden_states = True
     return model
+
+
+def load_generic_hf_model(
+    checkpoint: str,
+    mol_type: str = "SMILES",
+    **kwargs,
+):
+    model = AutoModelForCausalLM.from_pretrained(checkpoint, **kwargs)
+    return prepare_hf_model(model, mol_type=mol_type)

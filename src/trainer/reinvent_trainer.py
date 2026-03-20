@@ -654,7 +654,8 @@ class REINVENTTrainer(PolicyTrainer):
         with open(os.path.join(save_path, "generated_molecules.json"), "w", encoding="utf-8") as f:
             f.write(json_string)
 
-        top_scores_idx = torch.topk(scores, 100, largest=self.config.higher_is_better).indices
+        top_k = min(100, len(scores))
+        top_scores_idx = torch.topk(scores, top_k, largest=self.config.higher_is_better).indices
         top_generated_smiles = np.array(generated_smiles)[top_scores_idx].tolist()
         top_scores = scores[top_scores_idx]
 
@@ -676,7 +677,8 @@ class REINVENTTrainer(PolicyTrainer):
         if wandb.run is not None:
             wandb.log({"eval/results": wandb_table})
 
-        top10_indices = torch.topk(top_scores, 10, largest=self.config.higher_is_better).indices
+        top10_k = min(10, len(top_scores))
+        top10_indices = torch.topk(top_scores, top10_k, largest=self.config.higher_is_better).indices
 
         mol_buffer = {
             smiles: (score_tensor.item(), idx)
