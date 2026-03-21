@@ -16,6 +16,7 @@ CONFIG_NAME="${CONFIG_NAME:-finetune_PMO_ZINC_1B_bpe_smiles_llama-32M}"
 NAME_PREFIX="${NAME_PREFIX:-novomol}"
 GANTRY_GROUP="${GANTRY_GROUP:-}"
 GANTRY_ALLOW_DIRTY="${GANTRY_ALLOW_DIRTY:-0}"
+GANTRY_SHOW_LOGS="${GANTRY_SHOW_LOGS:-0}"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <task_name> [extra finetune args...]" >&2
@@ -36,6 +37,11 @@ fi
 dirty_args=()
 if [[ "$GANTRY_ALLOW_DIRTY" == "1" ]]; then
   dirty_args+=(--allow-dirty)
+fi
+
+show_logs_args=()
+if [[ "$GANTRY_SHOW_LOGS" == "1" ]]; then
+  show_logs_args+=(--show-logs)
 fi
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo no-git-branch)"
@@ -65,6 +71,7 @@ gantry run \
     --workspace "$WORKSPACE" \
     --gpus "$GPUS" \
     "${dirty_args[@]}" \
+    "${show_logs_args[@]}" \
     --name "$name" \
     "${group_args[@]}" \
     -- \
