@@ -302,11 +302,18 @@ class NovoMolGen(GPTLMHeadModel):
             top_k=top_k,
             top_p=top_p,
             eos_token_id=tokenizer.eos_token_id,
-            return_dict_in_generate=True,
+            # flash-attn generation has become incompatible with newer
+            # Transformers output containers that disallow attribute mutation.
+            # We only need token ids here, so request plain sequences.
+            return_dict_in_generate=False,
         )
-
+        generated_sequences = (
+            generation_output.sequences
+            if hasattr(generation_output, "sequences")
+            else generation_output
+        )
         sequences = self._filter_tokens_after_eos(
-            generation_output.sequences, eos_id=tokenizer.eos_token_id
+            generated_sequences, eos_id=tokenizer.eos_token_id
         )
 
         decoded_strings = tokenizer.batch_decode(sequences, skip_special_tokens=True)
