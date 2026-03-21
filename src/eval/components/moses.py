@@ -23,11 +23,11 @@ from tqdm import tqdm
 from loguru import logger
 from rdkit import Chem
 from rdkit.Chem.Crippen import MolLogP  # type: ignore
-from rdkit.Chem.Descriptors import MolWt  # type: ignore
 from rdkit.Chem.GraphDescriptors import BertzCT
 from rdkit.Chem.MACCSkeys import GenMACCSKeys  # type: ignore
 from rdkit.Chem.QED import qed
 from rdkit.Chem.rdMolDescriptors import (
+    CalcExactMolWt,
     CalcNumAliphaticRings,
     CalcNumAromaticRings,
     CalcNumRotatableBonds,
@@ -113,7 +113,7 @@ def weight(mol):
 
     Returns float,
     """
-    return MolWt(mol)
+    return CalcExactMolWt(mol)
 
 
 def get_n_rings(mol):

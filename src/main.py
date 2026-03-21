@@ -12,7 +12,6 @@ from omegaconf import DictConfig, OmegaConf
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
-from src.data_loader import MolDataModule
 from src.eval import MoleculeEvaluator
 from src.trainer import HFTrainer, HFTrainingArguments
 from src.logging_utils import get_logger
@@ -41,6 +40,8 @@ def run_tokenize(cfg: DictConfig) -> None:
       • a *pure* dataset YAML (keys match the MolDataModule signature), or
       • a full experiment YAML that has a top-level `dataset` block.
     """
+    from src.data_loader import MolDataModule
+
     # extract the kwargs for MolDataModule
     dm_kwargs = dict(cfg) if "dataset_name" in cfg else dict(cfg.dataset)
     dm = MolDataModule(**dm_kwargs)
@@ -57,6 +58,8 @@ def run_tokenize(cfg: DictConfig) -> None:
           f"Eval={dm.eval_dataset and len(dm.eval_dataset) or 0}")
 
 def run_train(cfg: DictConfig) -> None:
+    from src.data_loader import MolDataModule
+
     exp_name = creat_unique_experiment_name(cfg)
     output_dir = Path(cfg.save_path, exp_name)
     output_dir.mkdir(parents=True, exist_ok=True)
