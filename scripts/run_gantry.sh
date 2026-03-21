@@ -50,6 +50,10 @@ short_commit="$(git rev-parse --short HEAD 2>/dev/null || echo no-git-commit)"
 ts="$(date -u +%Y%m%d-%H%M%S)"
 slug="$(printf '%s' "$task" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9_-')"
 name="${NAME_PREFIX}-${slug}-${ts}"
+wandb_tags="${branch},${short_commit},${slug}"
+if [[ -n "$GANTRY_GROUP" ]]; then
+  wandb_tags="${wandb_tags},${GANTRY_GROUP}"
+fi
 
 echo "Submitting task: $task"
 echo "Gantry name: $name"
@@ -63,7 +67,7 @@ gantry run \
     --env WANDB_ENTITY="$WANDB_ENTITY" \
     --env WANDB_PROJECT="$WANDB_PROJECT" \
     --env WANDB_MODE="$WANDB_MODE" \
-    --env WANDB_TAGS="${branch},${short_commit},${slug}" \
+    --env WANDB_TAGS="$wandb_tags" \
     --secret-env HF_TOKEN=michaeln_HF_TOKEN \
     --secret-env WANDB_API_KEY=michaeln_WANDB_API_KEY \
     --priority "$PRIORITY" \
