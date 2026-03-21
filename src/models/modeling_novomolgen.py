@@ -304,8 +304,10 @@ class NovoMolGen(GPTLMHeadModel):
             eos_token_id=tokenizer.eos_token_id,
             # flash-attn generation has become incompatible with newer
             # Transformers output containers that disallow attribute mutation.
-            # We only need token ids here, so request plain sequences.
+            # Request plain sequences and keep scores enabled so the flash-attn
+            # helper doesn't try to mutate an immutable output container.
             return_dict_in_generate=False,
+            output_scores=True,
         )
         generated_sequences = (
             generation_output.sequences
