@@ -6,11 +6,6 @@ defaults:
   - trainer: hf_trainer_one_epoch
   - _self_
 
-trainer:
-  per_device_train_batch_size: 2400
-  per_device_eval_batch_size: 2400
-  gradient_accumulation_steps: 2
-
 finetune:
   checkpoint: "chandar-lab/NovoMolGen_32M_SMILES_BPE"
   n_jobs: 4

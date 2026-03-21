@@ -2,7 +2,7 @@
 type: "AugmentedHC"
 seed: 42
 save_path: './save_augment_hc'
-checkpoint: 75000
+checkpoint: chandar-lab/NovoMolGen_157M_SMILES_BPE
 task_name: "Perindopril_MPO"
 learning_rate: 5e-4
 per_device_train_batch_size: 64
