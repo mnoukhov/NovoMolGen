@@ -17,7 +17,9 @@ gantry run \
     --gpus 1 \
     --timeout 5h \
     --task-name gantry-moses \
-    --beaker-image docker://molecularsets/moses \
+    --docker-image molecularsets/moses \
+    --system-python \
+    --no-logs \
     --install "echo 'Skipping Gantry Python setup'" \
     --weka=oe-adapt-default:/weka/oe-adapt-default \
     -- /bin/bash -lc 'mkdir -p /root && ln -sfn "/weka/oe-adapt-default/'"${beaker_whoami}"'/.config" /root/.config && exec /opt/miniconda/bin/python "$@"' bash "${python_args[@]}"
